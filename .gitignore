@@ -32,9 +32,16 @@
 *.app
 
 # dir
-bin/*
-obj/*
+bin/
+obj/
+build/
+
+# file
 *.orig
 *.csv
+*.swp
+*.txt
 
-
+# tag
+tag
+*.tag
