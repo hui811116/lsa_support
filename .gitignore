@@ -41,6 +41,8 @@ build/
 *.csv
 *.swp
 *.txt
+src/*.swp
+include/*.swp
 
 # tag
 tag

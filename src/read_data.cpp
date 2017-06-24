@@ -30,7 +30,7 @@ void read_data(fstream& file,std::vector< vector<unsigned char> >& src)
 }
 
 void read_result(fstream& file, 
-                 std::vector< std::pair<int,std::vector<unsigned char> > >& data,
+                 std::vector< std::tuple<int,std::vector<unsigned char>,float> >& data,
                  std::vector<std::tuple<time_t,int,int> >& events)
 {
     data.clear();
@@ -40,6 +40,7 @@ void read_result(fstream& file,
     struct tm tm;
     time_t parsed_time;
     int ins_bytes, ins_pkts;
+	float pwr = 0.0;
     while(getline(file,line,'\n')){
         if(line=="[Event]"){
             while(getline(file,line,'\n')){
@@ -70,7 +71,10 @@ void read_result(fstream& file,
                 }else if(line=="<seq>"){
                     getline(file,line,'\n');
                     seqno = atoi(line.c_str());
-                }else if(line=="<size>"){
+                }else if(line=="<pwr>"){
+					getline(file,line,'\n');
+					pwr = atof(line.c_str());
+				}else if(line=="<size>"){
                     getline(file,line,'\n');
                     byte_size = atoi(line.c_str());
                 }else if(line=="[Hex]"){
@@ -84,7 +88,8 @@ void read_result(fstream& file,
                      }
                      if(u8.size()==byte_size){
                          // size matched
-                         data.push_back(std::pair<int,std::vector<unsigned char> >(seqno,u8));
+						 auto temp_data = std::make_tuple(seqno,u8,pwr);
+                         data.push_back(temp_data);
                      }else{
                          DEBUG<<"<WARNING> parsed size:"<<u8.size()<<" ,nominal:"<<byte_size<<" begin:"<<(int)u8[0]<<" ,end:"<<(int)u8[u8.size()-1]<<std::endl;
                      }
@@ -105,8 +110,9 @@ void read_result(fstream& file,
 
 
 int err_count(std::vector<int>& bits_count,
+			  std::vector<float>& pwr_count,
 			  const std::vector< std::vector<unsigned char> >& data_src, 
-			  const std::vector<std::pair<int,std::vector<unsigned char> > > result)
+			  const std::vector<std::tuple<int,std::vector<unsigned char>,float> > result)
 {
 	int total=0;
 	bits_count.clear();
@@ -127,6 +133,7 @@ int err_count(std::vector<int>& bits_count,
 		}
 		total+=count;
 		bits_count.push_back(count);
+		pwr_count.push_back(std::get<2>(result[i]));
 	}
 	return total;
 }
@@ -148,7 +155,7 @@ int main(int argc,char** argv)
 
     DEBUG<<"reading file:"<<argv[2]<<std::endl;
     d_file_result.open(argv[2],std::fstream::in);
-    std::vector<std::pair<int,std::vector<unsigned char> > > d_result;
+    std::vector<std::tuple<int,std::vector<unsigned char>,float> > d_result;
     std::vector<std::tuple<time_t,int,int>> d_events;
 	// read result
     read_result(d_file_result,d_result,d_events);
@@ -156,8 +163,9 @@ int main(int argc,char** argv)
 
 	// counting ber
 	std::vector<int> d_err_bits;
+	std::vector<float> d_pwr_recs;
 	DEBUG<<"counting error bits"<<std::endl;
-	int d_total_count = err_count(d_err_bits,d_data_src,d_result);
+	int d_total_count = err_count(d_err_bits,d_pwr_recs,d_data_src,d_result);
 
     std::cout<<setfill('*')<<setw(30)<<"RESULT"<<setfill('*')<<setw(30)<<"*"<<std::endl;
     std::cout<<std::left<<setfill(' ')<<setw(20)<<"Data-source size"<<":"<<d_data_src.size()<<std::endl;
@@ -165,8 +173,6 @@ int main(int argc,char** argv)
     std::cout<<std::left<<setfill(' ')<<setw(20)<<"Result-time events"<<":"<<d_events.size()<<std::endl;
     std::cout<<std::left<<setfill(' ')<<setw(20)<<"Result-error bits"<<":"<<d_total_count<<std::endl;
 	std::cout<<setfill('*')<<setw(60)<<"*"<<std::endl;
-
-	
 
     return 0;
 }

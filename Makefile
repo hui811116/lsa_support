@@ -31,7 +31,7 @@ csv_reader: ${OBJ} ${SRC_DIR}/read_csv.cpp
 	@${CXX} ${CPPFLAGS} ${INCLUDE} -o ${EXE_DIR}/$@ $^
 
 obj/%.o: src/%.cpp include/%.h
-	${CXX} ${CPPFLAGS} ${INCLUDE} -o $@ -c $<
+	@${CXX} ${CPPFLAGS} ${INCLUDE} -o $@ -c $<
 
 clean:
-	rm -f ${EXE_DIR}/* ${OBJ_DIR}/*
+	@rm -f ${EXE_DIR}/* ${OBJ_DIR}/*
