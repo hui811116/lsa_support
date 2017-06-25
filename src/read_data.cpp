@@ -8,6 +8,8 @@
 #include <iomanip>
 #include <ctime>
 #include <tuple>
+#include <algorithm>
+#include <cmath>
 #include "utils.h"
 
 #define d_debug false
@@ -72,11 +74,11 @@ void read_result(fstream& file,
                     getline(file,line,'\n');
                     seqno = atoi(line.c_str());
                 }else if(line=="<pwr>"){
-					getline(file,line,'\n');
-					pwr = atof(line.c_str());
-				}else if(line=="<size>"){
-                    getline(file,line,'\n');
-                    byte_size = atoi(line.c_str());
+			getline(file,line,'\n');
+			pwr = atof(line.c_str());
+		}else if(line=="<size>"){
+			getline(file,line,'\n');
+			byte_size = atoi(line.c_str());
                 }else if(line=="[Hex]"){
                      // payload bytes
                      getline(file,line,'\n');
@@ -88,7 +90,7 @@ void read_result(fstream& file,
                      }
                      if(u8.size()==byte_size){
                          // size matched
-						 auto temp_data = std::make_tuple(seqno,u8,pwr);
+			 auto temp_data = std::make_tuple(seqno,u8,pwr);
                          data.push_back(temp_data);
                      }else{
                          DEBUG<<"<WARNING> parsed size:"<<u8.size()<<" ,nominal:"<<byte_size<<" begin:"<<(int)u8[0]<<" ,end:"<<(int)u8[u8.size()-1]<<std::endl;
@@ -109,13 +111,17 @@ void read_result(fstream& file,
 }
 
 
-int err_count(std::vector<int>& bits_count,
-			  std::vector<float>& pwr_count,
-			  const std::vector< std::vector<unsigned char> >& data_src, 
-			  const std::vector<std::tuple<int,std::vector<unsigned char>,float> > result)
+int err_count(
+		std::vector<int>& bits_count,
+		std::vector<float>& pwr_count,
+		std::vector<int>& pkt_bytes,	
+		const std::vector< std::vector<unsigned char> >& data_src, 
+		const std::vector<std::tuple<int,std::vector<unsigned char>,float> >& result)
 {
 	int total=0;
 	bits_count.clear();
+	pwr_count.clear();
+	pkt_bytes.clear();
 	for(int i=0;i<result.size();++i){
 		int seq = std::get<0>(result[i]);
 		int count =0;
@@ -134,45 +140,156 @@ int err_count(std::vector<int>& bits_count,
 		total+=count;
 		bits_count.push_back(count);
 		pwr_count.push_back(std::get<2>(result[i]));
+		pkt_bytes.push_back(data_src[seq].size());
 	}
 	return total;
 }
 
+double throughput_count(
+		std::vector<double>& seconds,
+		std::vector<int>& bytes,
+		const std::vector< std::tuple<time_t,int,int> >& events)
+{
+	seconds.clear();
+	bytes.clear();
+	double time_acc=0;
+	for(int i=0;i<events.size()-1;++i){
+		time_t begin = std::get<0>(events[i]);
+		time_t end = std::get<0>(events[i+1]);
+		int bytes_acc = std::get<1>(events[i+1]);
+		double diff = std::difftime(end,begin);
+		seconds.push_back(diff);
+		bytes.push_back(bytes_acc);
+		time_acc+= diff;
+	}
+	return time_acc;
+}
+
+void ber_calc_and_write(
+	std::fstream& file, 
+	const std::vector<float>& pwrs, 
+	const std::vector<int>& err_bits,
+	const std::vector<int>& pkts)
+{
+	std::vector<float>::const_iterator it;
+	it = std::min_element(pwrs.begin(),pwrs.end());
+	float min = *it;
+	it = std::max_element(pwrs.begin(),pwrs.end());
+	float max = *it;
+	float min_pwr = std::round(min);
+	float max_pwr = std::round(max);
+	int interval = (max_pwr-min_pwr)+1;
+	std::vector<int> err_buf(interval);
+	std::vector<int> acc_buf(interval);
+	std::vector<float> pwr_level(interval);
+	for(int i=0;i<interval;++i){
+		pwr_level[i] = min_pwr + i;
+	}
+	for(int i=0;i<err_bits.size();++i){
+		float rnd = std::round(pwrs[i]);
+		int idx = (int)floor(rnd-min_pwr);
+		err_buf[idx]+=err_bits[i];
+		acc_buf[idx]+=pkts[i];
+	}
+	file<<"pwr,acc,err,rate"<<std::endl;
+	for(int i=0;i<interval;i++){
+		if(acc_buf[i]==0){
+			continue;
+		}
+		double tmp_rate = err_buf[i]/(double)acc_buf[i];
+		file<<pwr_level[i]<<","<<acc_buf[i]<<","<<err_buf[i]<<","<<tmp_rate<<std::endl;
+	}
+}
+
+void thr_calc_and_write(
+	std::fstream& file,
+	const std::vector<double>& seconds,
+	const std::vector<int>& bytes)
+{
+	std::vector<int> time_recs;
+	int time_acc=0;
+	std::vector<float> avg_rates;
+	for(int i=0;i<seconds.size();++i){
+		int duration = (int)seconds[i];
+		for(int j=0;j<duration;++j){
+			float tmp_rate = bytes[i]/seconds[i];
+			avg_rates.push_back(tmp_rate);
+			time_recs.push_back(time_acc++);
+		}
+	}
+	file<<"time,rate"<<std::endl;
+	for(int i=0;i<time_recs.size();++i){
+		file<<time_recs[i]<<","<<avg_rates[i]<<std::endl;
+	}
+}
+
 int main(int argc,char** argv)
 {
-    if(argc<3){
-        std::cout<<"<USAGE> data_reader [data_file] [result_file]"<<std::endl;
-        return 0;
-    }
-    std::vector< std::vector<unsigned char> > d_data_src;
-    fstream d_file_data, d_file_result;
-    DEBUG<<"reading file:"<<argv[1]<<std::endl;
-    d_file_data.open(argv[1],std::fstream::in);
+	if(argc<5){
+		std::cout<<"<USAGE> data_reader [data_file] [result_file] [ber output_file] [throughput file]"<<std::endl;
+		return 0;
+	}
+	std::vector< std::vector<unsigned char> > d_data_src;
+	fstream d_file_data, d_file_result;
+	DEBUG<<"reading file:"<<argv[1]<<std::endl;
+	d_file_data.open(argv[1],std::fstream::in);
 	// read data source
-    read_data(d_file_data,d_data_src);
-    d_file_data.close();
+	read_data(d_file_data,d_data_src);
+	d_file_data.close();
 
 
-    DEBUG<<"reading file:"<<argv[2]<<std::endl;
-    d_file_result.open(argv[2],std::fstream::in);
-    std::vector<std::tuple<int,std::vector<unsigned char>,float> > d_result;
-    std::vector<std::tuple<time_t,int,int>> d_events;
+	DEBUG<<"reading file:"<<argv[2]<<std::endl;
+	d_file_result.open(argv[2],std::fstream::in);
+	std::vector<std::tuple<int,std::vector<unsigned char>,float> > d_result;
+	std::vector<std::tuple<time_t,int,int>> d_events;
 	// read result
-    read_result(d_file_result,d_result,d_events);
-    d_file_result.close();
+	read_result(d_file_result,d_result,d_events);
+	d_file_result.close();
 
 	// counting ber
 	std::vector<int> d_err_bits;
 	std::vector<float> d_pwr_recs;
+	std::vector<int> d_pkt_bytes;
 	DEBUG<<"counting error bits"<<std::endl;
-	int d_total_count = err_count(d_err_bits,d_pwr_recs,d_data_src,d_result);
+	int d_total_count = err_count(
+				d_err_bits,
+				d_pwr_recs, 
+				d_pkt_bytes,
+				d_data_src,
+				d_result);
+	// counting throughput
+	std::vector<double> d_thr_seconds;
+	std::vector<int> d_thr_bytes;
+	DEBUG<<"counting throughput rates"<<std::endl;
+	double d_time_acc = throughput_count(d_thr_seconds,d_thr_bytes,d_events);
 
-    std::cout<<setfill('*')<<setw(30)<<"RESULT"<<setfill('*')<<setw(30)<<"*"<<std::endl;
-    std::cout<<std::left<<setfill(' ')<<setw(20)<<"Data-source size"<<":"<<d_data_src.size()<<std::endl;
-    std::cout<<std::left<<setfill(' ')<<setw(20)<<"Result-payload size"<<":"<<d_result.size()<<std::endl;
-    std::cout<<std::left<<setfill(' ')<<setw(20)<<"Result-time events"<<":"<<d_events.size()<<std::endl;
-    std::cout<<std::left<<setfill(' ')<<setw(20)<<"Result-error bits"<<":"<<d_total_count<<std::endl;
+	std::cout<<setfill('*')<<setw(30)<<"RESULT"<<setfill('*')<<setw(30)<<"*"<<std::endl;
+	std::cout<<std::left<<setfill(' ')<<setw(20)<<"Data-source size"<<":"<<d_data_src.size()<<std::endl;
+	std::cout<<std::left<<setfill(' ')<<setw(20)<<"Result-payload size"<<":"<<d_result.size()<<std::endl;
+	std::cout<<std::left<<setfill(' ')<<setw(20)<<"Result-time events"<<":"<<d_events.size()<<std::endl;
+	std::cout<<std::left<<setfill(' ')<<setw(20)<<"Result-error bits"<<":"<<d_total_count<<std::endl;
 	std::cout<<setfill('*')<<setw(60)<<"*"<<std::endl;
 
-    return 0;
+	// integrating results
+	fstream d_out_file;
+	DEBUG<<"writing file--"<<argv[3]<<std::endl;
+	d_out_file.open(argv[3],std::fstream::out | std::fstream::trunc);
+	if(!d_out_file.is_open()){
+		std::cerr<<"ERROR:file cannot be opened"<<std::endl;
+		return 1;
+	}
+	ber_calc_and_write(d_out_file,d_pwr_recs,d_err_bits, d_pkt_bytes);
+	d_out_file.close();
+
+	// integrating throughput
+	fstream d_thr_file;
+	DEBUG<<"writing throughput--"<<argv[4]<<std::endl;
+	d_thr_file.open(argv[4],std::fstream::out | std::fstream::trunc);
+	if(!d_thr_file.is_open()){
+		std::cerr<<"ERROR:file connot be opened"<<std::endl;
+		return 1;
+	}
+	thr_calc_and_write(d_thr_file,d_thr_seconds,d_thr_bytes);
+	d_thr_file.close();
+	return 0;
 }
