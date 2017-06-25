@@ -1,5 +1,5 @@
 # lsa_support
-Some small programs to support the experimental measurements of gr-lsa
+Some small programs to support the experimental results of gr-lsa
 
 Usage:
   data_reader {data file} {result file}
