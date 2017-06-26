@@ -17,6 +17,49 @@
 
 using namespace std;
 
+bool parse_args(int argc, char** argv, string& ber, string& thr)
+{
+	if(argc<3){
+		return false;
+	}
+	string str(argv[2]);
+	size_t dot_pos = str.find_first_of('.');
+	if(dot_pos==string::npos){
+		ber = str+".ber";
+		thr = str+".thr";
+	}else{
+		string name = str.substr(0,dot_pos);
+		ber = name +".ber";
+		thr = name +".thr";
+	}
+	int count =3;
+	while(count<argc){
+		string tmp_str(argv[count]);
+		if(tmp_str == "--ber"){
+			count++;
+			if(count<argc){
+				string crc(argv[count]);
+				size_t check = crc.find_first_of('-');
+				if(check==string::npos){
+					ber = crc;
+					count++;
+				}
+			}
+		}else if(tmp_str=="--thr"){
+			count++;
+			if(count<argc){
+				string crc(argv[count]);
+				size_t check = crc.find_first_of('-');
+				if(check==string::npos){
+					thr = crc;
+					count++;
+				}
+			}
+		}
+	}
+	return true;
+}
+
 void read_data(fstream& file,std::vector< vector<unsigned char> >& src)
 {
     std::string str,line;
@@ -225,8 +268,9 @@ void thr_calc_and_write(
 
 int main(int argc,char** argv)
 {
-	if(argc<5){
-		std::cout<<"<USAGE> data_reader [data_file] [result_file] [ber output_file] [throughput file]"<<std::endl;
+	string ber_file, thr_file;
+	if(!parse_args(argc,argv,ber_file,thr_file)){
+		std::cout<<"<USAGE> data_reader [data_file] [result_file] (--ber output_file) (--thr throughput_file)"<<std::endl;
 		return 0;
 	}
 	std::vector< std::vector<unsigned char> > d_data_src;
@@ -272,8 +316,8 @@ int main(int argc,char** argv)
 
 	// integrating results
 	fstream d_out_file;
-	DEBUG<<"writing file--"<<argv[3]<<std::endl;
-	d_out_file.open(argv[3],std::fstream::out | std::fstream::trunc);
+	DEBUG<<"writing file--"<<ber_file<<std::endl;
+	d_out_file.open(ber_file.c_str(),std::fstream::out | std::fstream::trunc);
 	if(!d_out_file.is_open()){
 		std::cerr<<"ERROR:file cannot be opened"<<std::endl;
 		return 1;
@@ -283,8 +327,8 @@ int main(int argc,char** argv)
 
 	// integrating throughput
 	fstream d_thr_file;
-	DEBUG<<"writing throughput--"<<argv[4]<<std::endl;
-	d_thr_file.open(argv[4],std::fstream::out | std::fstream::trunc);
+	DEBUG<<"writing throughput--"<<thr_file<<std::endl;
+	d_thr_file.open(thr_file.c_str(),std::fstream::out | std::fstream::trunc);
 	if(!d_thr_file.is_open()){
 		std::cerr<<"ERROR:file connot be opened"<<std::endl;
 		return 1;
