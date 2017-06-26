@@ -2,7 +2,7 @@
 Some small programs to support the experimental results of gr-lsa
 
 Usage:
-  data_reader {data file} {result file}
+  data_reader {data file} {result file} {ber output file} {throughput file}
 
   data file: should be bytes in hex and store in .csv format
   
