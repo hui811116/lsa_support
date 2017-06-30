@@ -277,6 +277,10 @@ int main(int argc,char** argv)
 	fstream d_file_data, d_file_result;
 	DEBUG<<"reading file:"<<argv[1]<<std::endl;
 	d_file_data.open(argv[1],std::fstream::in);
+	if(!d_file_data.is_open()){
+		cerr<<"ERROR: data file cannot be opened..."<<std::endl;
+		return 1;
+	}
 	// read data source
 	read_data(d_file_data,d_data_src);
 	d_file_data.close();
@@ -284,6 +288,10 @@ int main(int argc,char** argv)
 
 	DEBUG<<"reading file:"<<argv[2]<<std::endl;
 	d_file_result.open(argv[2],std::fstream::in);
+	if(!d_file_result.is_open()){
+		cerr<<"ERROR: result file cannot be opened..."<<std::endl;
+		return 1;
+	}
 	std::vector<std::tuple<int,std::vector<unsigned char>,float> > d_result;
 	std::vector<std::tuple<time_t,int,int>> d_events;
 	// read result

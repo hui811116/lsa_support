@@ -1,6 +1,6 @@
 CXX=g++
-CPPFALGS= -std=c++11
-target=data_reader csv_reader 
+CPPFLAGS= -std=c++11
+target=data_reader csv_reader throughput_reader
 SRC_DIR=src
 INC_DIR=include
 EXE_DIR=bin
@@ -23,11 +23,15 @@ DIR:
 	@mkdir -p ${OBJ_DIR}
 
 data_reader:${OBJ} ${SRC_DIR}/read_data.cpp 
-	@echo "\033[33;1m Building executables $@\033[0m"
-	@${CXX} ${CPPFALGS} ${INCLUDE} -o ${EXE_DIR}/$@ $^
+	@echo "\033[33;1m Building executable $@\033[0m"
+	@${CXX} ${CPPFLAGS} ${INCLUDE} -o ${EXE_DIR}/$@ $^
 
 csv_reader: ${OBJ} ${SRC_DIR}/read_csv.cpp
-	@echo "\033[33;1m Building executables $@\033[0m"
+	@echo "\033[33;1m Building executable $@\033[0m"
+	@${CXX} ${CPPFLAGS} ${INCLUDE} -o ${EXE_DIR}/$@ $^
+
+throughput_reader: ${OBJ} ${SRC_DIR}/read_throughput.cpp
+	@echo "\033[33;1m Building executable $@\033[0m"
 	@${CXX} ${CPPFLAGS} ${INCLUDE} -o ${EXE_DIR}/$@ $^
 
 obj/%.o: src/%.cpp include/%.h
