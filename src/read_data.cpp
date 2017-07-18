@@ -17,7 +17,11 @@
 
 using namespace std;
 
-bool parse_args(int argc, char** argv, string& ber, string& thr)
+enum WRITETYPE{
+	SNR,
+	LIST
+	};
+bool parse_args(int argc, char** argv, string& ber, string& thr, WRITETYPE& type)
 {
 	if(argc<3){
 		return false;
@@ -55,6 +59,11 @@ bool parse_args(int argc, char** argv, string& ber, string& thr)
 					count++;
 				}
 			}
+		}else if(tmp_str=="--list"){
+			count++;
+			type = LIST;
+		}else{
+			return false;
 		}
 	}
 	return true;
@@ -170,11 +179,11 @@ int err_count(
 		int count =0;
 		std::vector<unsigned char> tmp_bytes = std::get<1>(result[i]);
 		if(seq>=data_src.size()){
-			DEBUG<<"<Warning> found a sequence number not in the range of data source"<<std::endl;
+			std::cerr<<"<Warning> found a sequence number not in the range of data source"<<std::endl;
 			continue;
 		}
 		if(tmp_bytes.size()!=data_src[seq].size()){
-			DEBUG<<"<Warning> the number of received bytes and data bytes are not matched"<<std::endl;
+			std::cerr<<"<Warning> the number of received bytes and data bytes are not matched"<<std::endl;
 			continue;
 		}
 		for(int j=0;j<data_src[seq].size();++j){
@@ -244,6 +253,18 @@ void ber_calc_and_write(
 	}
 }
 
+void list_err_bits(
+	std::fstream& file,
+	const std::vector<int>& err_bits,
+	const std::vector<int>& pkts
+	)
+{
+	file<<"pktsize,err"<<std::endl;
+	for(int i=0;i<err_bits.size();++i){
+		file<<pkts[i]<<","<<err_bits[i]<<std::endl;
+	}
+}
+
 void thr_calc_and_write(
 	std::fstream& file,
 	const std::vector<double>& seconds,
@@ -269,8 +290,14 @@ void thr_calc_and_write(
 int main(int argc,char** argv)
 {
 	string ber_file, thr_file;
-	if(!parse_args(argc,argv,ber_file,thr_file)){
-		std::cout<<"<USAGE> data_reader [data_file] [result_file] (--ber output_file) (--thr throughput_file)"<<std::endl;
+	WRITETYPE type = SNR;
+	if(!parse_args(argc,argv,ber_file,thr_file,type)){
+		std::cout<<"<USAGE> data_reader [data_file] [result_file] <arguments>"<<std::endl;
+		std::cout<<"-----------------------------------------------------------"<<std::endl;
+		std::cout<<"Arguments:"<<std::endl;
+		std::cout<<"--ber [filename]: specify filename of BER result"<<std::endl;
+		std::cout<<"--thr [filename]: specify filename of Throughput result"<<std::endl;
+		std::cout<<"--list: change write mode to LIST (default:SNR)"<<std::endl;
 		return 0;
 	}
 	std::vector< std::vector<unsigned char> > d_data_src;
@@ -330,7 +357,18 @@ int main(int argc,char** argv)
 		std::cerr<<"ERROR:file cannot be opened"<<std::endl;
 		return 1;
 	}
-	ber_calc_and_write(d_out_file,d_pwr_recs,d_err_bits, d_pkt_bytes);
+	switch(type){
+		case SNR:
+			ber_calc_and_write(d_out_file,d_pwr_recs,d_err_bits, d_pkt_bytes);
+		break;
+		case LIST:
+			
+		break;
+		default:
+			std::cerr<<"Undefined write mode";
+			return 1;
+		break;
+	}
 	d_out_file.close();
 
 	// integrating throughput
