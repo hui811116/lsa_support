@@ -362,7 +362,7 @@ int main(int argc,char** argv)
 			ber_calc_and_write(d_out_file,d_pwr_recs,d_err_bits, d_pkt_bytes);
 		break;
 		case LIST:
-			
+			list_err_bits(d_out_file,d_err_bits,d_pkt_bytes);
 		break;
 		default:
 			std::cerr<<"Undefined write mode";
